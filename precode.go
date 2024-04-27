@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+var mu sync.Mutex
+var wg sync.WaitGroup
+
 // Generator генерирует последовательность чисел 1,2,3 и т.д. и
 // отправляет их в канал ch. При этом после записи в канал для каждого числа
 // вызывается функция fn. Она служит для подсчёта количества и суммы
@@ -23,7 +26,7 @@ func Generator(ctx context.Context, ch chan<- int64, fn func(int64)) {
 			counter++
 
 		case <-ctx.Done():
-			close(ch)
+			defer close(ch)
 			return
 		}
 	}
@@ -36,10 +39,11 @@ func Worker(in <-chan int64, out chan<- int64) {
 	for {
 		temp, ok := <-in
 		if !ok {
-			close(out)
+			defer close(out)
 			return
 		}
 		out <- temp
+		time.Sleep(1 * time.Millisecond)
 	}
 }
 
@@ -48,7 +52,9 @@ func main() {
 
 	// 3. Создание контекста
 	// ...
+	mu.Lock()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	mu.Unlock()
 	defer cancel()
 
 	// для проверки будем считать количество и сумму отправленных чисел
@@ -114,6 +120,7 @@ func main() {
 		count++
 		sum += temp
 	}
+	wg.Wait()
 
 	fmt.Println("Количество чисел", inputCount, count)
 	fmt.Println("Сумма чисел", inputSum, sum)
